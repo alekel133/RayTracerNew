@@ -1,0 +1,22 @@
+LEX = flex
+YACC = bison
+CC 	= clang
+CFLAGS =
+OFILES = lex.yy.o
+
+Parser: Parser.c lex.yy.c
+	$(CC) $(CFLAGS) -o Parser Parser.c lex.yy.c
+
+lex.yy.o: lex.yy.c lexer.h
+	$(CC) -o lex.yy.o -c lex.yy.c
+
+lex.yy.c: rules.l parser.tab.c
+	$(LEX) -o lex.yy.c rules.l parser.tab.c
+
+parse.tab.c: parser.y
+	$(YACC) -d -t parser.y
+
+
+
+clean:
+	rm  *.o lex.yy.c
