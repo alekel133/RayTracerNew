@@ -23,6 +23,7 @@ typedef struct{
   int j;
   Vector4d normal;
   Material material;
+  int vis;
 } Hit;
 
 typedef struct{
@@ -121,6 +122,7 @@ class BVH: public Primitive {
     void print(std::ostream &os) override;
 };
 
-Ray *generateRay(Camera &camera, int &iWidth, int &iHeight, int &i, int &j);
+Ray* generateRay(Camera &camera, int &iWidth, int &iHeight, int &i, int &j);
+Ray** generateDRays(Ray* ray, int dDepth);
 
 #endif

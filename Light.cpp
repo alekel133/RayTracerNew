@@ -4,42 +4,42 @@
 //------------------------- Point Light-------------------------//
 PointLight::PointLight() {
   this->point = Vector4d(0,0,0,1);
-  this->material.diffuse = nullptr;
+  this->parent = nullptr;
+  this->material.diffuse = new int[3];
+  this->material.specular = new int[3];
 }
 
 PointLight::PointLight(Vector4d &point, int *color) {
   this->point = point;
   this->material.diffuse = color;
+  this->material.specular = new int[3];
 }
 
 bool PointLight::isHit(Ray* ray, Hit &hit) {
   return false;
 }
 
-int *PointLight::illuminate(Ray* ray, Hit &hit, bool vis){
-  int color[3];
-  color[0] = this->material.shine*this->material.diffuse[0];
-  color[1] = this->material.shine*this->material.diffuse[1];
-  color[2] = this->material.shine*this->material.diffuse[2];
-  this->material.specular[0] = 0;
-  this->material.specular[1] = 0;
-  this->material.specular[2] = 0;
-  if(!vis) return this->material.specular;
-  Vector4d l = point - getLocal() * ray->eval(hit.t);
-  Vector4d v = (getLocal() * -ray->direction);
+int *PointLight::illuminate(Ray* ray, Hit &hit){
+  int *color = new int[3];
+  color[0] = 0;
+  color[1] = 0;
+  color[2] = 0;
+  Vector4d l = point - ray->eval(hit.t);
+  Vector4d v = -ray->direction;
   Vector4d h = (l+v).normalized();
+  Vector4d surfaceNorm = getLocal() * hit.normal;
   double distance = l.norm();
   l.normalize();
   double invDist = 1/(distance * distance);
-  double aofi = l.dot(hit.normal);
+  double aofi = l.dot(surfaceNorm);
 
-  for(int i = 0; i < 3; ++i) {
-    this->material.specular[i] = int((pow(hit.normal.dot(h), hit.material.shine) * hit.material.specular[i])+(color[i] * aofi * hit.material.diffuse[i] * invDist * 100));
-    if(this->material.specular[i] > 255)this->material.specular[i] = 255;
-    if(this->material.specular[i] < 0) this->material.specular[i] = 0;
+  for(int i = 0; i < 3; ++i){ 
+    color[i] = int((pow(surfaceNorm.dot(h), hit.material.shine) * hit.material.specular[i]) + ((this->material.shine * this->material.diffuse[i]/255.0) * aofi * hit.material.diffuse[i] * invDist * 75));
+    if(color[i] > 255) color[i] = 255;
+    if(color[i] < 0) color[i] = 0;
   }
 
-  return material.specular;
+  return color;
 }
 
 Vector4d PointLight::getDirection(Vector4d p) {
@@ -67,6 +67,7 @@ void PointLight::print(std::ostream &os) {
 //------------------------ Directional Light ------------------//
 DirectionalLight::DirectionalLight() {
   this->direction = Vector4d(0,0,1,0);
+  this->parent = nullptr;
   this->material.specular = nullptr;
 }
 
@@ -79,29 +80,24 @@ bool DirectionalLight::isHit(Ray* ray , Hit &hit) {
   return false;
 }
 
-int *DirectionalLight::illuminate(Ray *ray, Hit &hit, bool vis) {
-  int color[3];
-  color[0] = this->material.shine*this->material.diffuse[0];
-  color[1] = this->material.shine*this->material.diffuse[1];
-  color[2] = this->material.shine*this->material.diffuse[2];
-
-  material.specular[0] = 0;
-  material.specular[1] = 0;
-  material.specular[2] = 0;
-  if(!vis) return material.specular;
-  Vector4d dir = getLocal() * direction;
+int *DirectionalLight::illuminate(Ray *ray, Hit &hit) {
+  int *color = new int[3];
+  color[0] = 0;
+  color[1] = 0;
+  color[2] = 0;
+  Vector4d dir = direction;
   dir.normalize();
-  Vector4d v = (getLocal() * -ray->direction);
+  Vector4d v = -ray->direction;
   Vector4d h = (dir+v).normalized();
-  double aofi = dir.dot(hit.normal);
+  double aofi = dir.dot(getLocal() * hit.normal);
 
   for(int i = 0; i < 3; ++i) {
-    material.specular[i] = int((pow(hit.normal.dot(h), hit.material.shine) * hit.material.specular[i])+(color[i] * aofi * hit.material.diffuse[i]));
-    if(material.specular[i] > 255) material.specular[i] = 255;
-    if(material.specular[i] < 0) material.specular[i] = 0;
+    color[i] = int((pow((getLocal() * hit.normal).dot(h), hit.material.shine) * hit.material.specular[i])+((material.shine * this->material.diffuse[i]/255.0) * aofi * hit.material.diffuse[i]));
+    if(color[i] > 255) color[i] = 255;
+    if(color[i] < 0) color[i] = 0;
   }
 
-  return material.specular;
+  return color;
 }
 
 Vector4d DirectionalLight::getDirection(Vector4d point){
@@ -122,5 +118,6 @@ Vector4d DirectionalLight::getMax() {
 }
 
 void DirectionalLight::print(std::ostream &os) {
-  os << "PointLight (Label: " << label << ")";
+  os << "DirectionalLight (Label: " << label << ")";
 }
+

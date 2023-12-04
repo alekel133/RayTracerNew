@@ -8,7 +8,7 @@ class Light: public Primitive {
     Light() {}
     ~Light() {}
 
-    virtual int* illuminate(Ray *ray, Hit &hit, bool vis) = 0;
+    virtual int* illuminate(Ray *ray, Hit &hit) = 0;
     virtual Vector4d getDirection(Vector4d point) = 0;
     virtual Vector4d getPoint() = 0;
 };
@@ -20,7 +20,7 @@ class PointLight:public Light {
     PointLight();
     PointLight(Vector4d &point, int* color);
     bool isHit(Ray *ray, Hit &hit) override;
-    int* illuminate(Ray* ray, Hit &hit, bool vis) override;
+    int* illuminate(Ray* ray, Hit &hit) override;
     Vector4d getDirection(Vector4d point) override;
     Vector4d getPoint() override;
     Vector4d getMin() override;
@@ -35,7 +35,7 @@ class DirectionalLight: public Light {
     DirectionalLight();
     DirectionalLight(Vector4d &direction, int* color);
     bool isHit(Ray *ray, Hit &hit) override;
-    int* illuminate(Ray* ray, Hit &hit, bool vis) override;
+    int* illuminate(Ray* ray, Hit &hit) override;
     Vector4d getDirection(Vector4d point) override;
     Vector4d getPoint() override;
     Vector4d getMin() override;
@@ -43,6 +43,6 @@ class DirectionalLight: public Light {
     void print(std::ostream &os) override;
 };
 
-
+Ray* generateSRay(Ray* ray, Hit &hit , Light* light);
 
 #endif

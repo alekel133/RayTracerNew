@@ -12,6 +12,12 @@
 using std::cout, std::endl, std::vector;
 using namespace cimg_library;
 
+void addColors(int *a, int *b) {
+  a[0] += b[0];
+  a[1] += b[1];
+  a[2] += b[2];
+}
+
 int main(int argc, char *argv[]) {
   if(argc <= 2) {
     cout << "Invalid number of arguments." << endl;
@@ -21,6 +27,7 @@ int main(int argc, char *argv[]) {
 
   char *infile = argv[1];
   char *outfile = argv[2];
+
   ParseData parseData;
 
   parseFile(infile, parseData);
@@ -41,7 +48,7 @@ int main(int argc, char *argv[]) {
 
   // OutPut Buffer
   CImg<unsigned char> outImage(Width, Height, 1, 3, 0);
-  
+
   boxes.reserve(Primitives.size());
   vector<Primitive*> tmp;
   for(int i = 0; i < Primitives.size(); ++i) {
@@ -51,24 +58,26 @@ int main(int argc, char *argv[]) {
     tmp.clear();
   }
 
-  //GenerateRays
+  Hit* hits = new Hit[Width*Height];
   Ray*** rays = new Ray**[Width];
+  #pragma omp parallel for
   for(int i = 0; i < Width; ++i) rays[i] = new Ray*[Height];
-  #pragma omp parallel 
-  {
-    #pragma omp for
-    for(int i = 0; i < Width; ++i) {
-      for(int j = 0; j < Height; ++j) {
-        Ray *ray = new Ray;
-        ray = generateRay(*camera,Width, Height, i, j); rays[i][j] = ray;
-      }
+  int ***colors = new int**[Width];
+  #pragma omp parallel for
+  for(int i = 0; i < Width; ++i) {
+    colors[i] = new int*[Height];
+    for(int j = 0; j < Height; ++j) {
+      colors[i][j] = new int[3];
+      colors[i][j][0] = 0;
+      colors[i][j][1] = 0;
+      colors[i][j][2] = 0;
     }
   }
-
-
-  Hit* hits = new Hit[Width*Height];
-  #pragma omp parallel for
+  double minT;
+  Hit hit;
+  #pragma omp parallel private(hit)
   {
+    #pragma omp for
     for(int i = 0; i < Width*Height; ++i) {
       hits[i] = Hit();
       hits[i].material.diffuse = new int[3];
@@ -79,42 +88,80 @@ int main(int argc, char *argv[]) {
       hits[i].material.specular[0] = 0;
       hits[i].material.specular[1] = 0;
       hits[i].material.specular[2] = 0;
+      hits[i].vis = 0;
     }
-  }
+ 
 
-  double minT;
-  Hit hit;
-  #pragma omp parallel private(hit)
-  {
+  //GenerateRays
     #pragma omp for
-    for(int k = 0; k < Width*Height; ++k) {
-      hits[k].i = k/Width;
-      hits[k].j = k%Width;
+    for(int i = 0; i < Width; ++i) {
+      for(int j = 0; j < Height; ++j) {
+        Ray *ray = new Ray;
+        ray = generateRay(*camera,Width, Height, i, j); rays[i][j] = ray;
+      }
+    }
+
+  //Intersect Objects, and get normal and location data
+    #pragma omp for
+    for(int i = 0; i < Width*Height; ++i) {
+      hits[i].i = i%Width;
+      hits[i].j = i/Width;
       minT = DBL_MAX;
-      for(int l = 0; l < boxes.size(); ++l) {
-        if(boxes[l].isHit(rays[hits[k].i][hits[k].j], hit)) {
+      for(int j = 0; j < boxes.size(); ++j) {
+        if(boxes[j].isHit(rays[hits[i].i][hits[i].j], hit)) {
           if(hit.t < minT){
-            hits[k].t = hit.t;
-            hits[k].material.diffuse[0] = hit.material.diffuse[0];
-            hits[k].material.diffuse[1] = hit.material.diffuse[1];
-            hits[k].material.diffuse[2] = hit.material.diffuse[2];
-            hits[k].material.specular[0] = hit.material.specular[0];
-            hits[k].material.specular[1] = hit.material.specular[1];
-            hits[k].material.specular[2] = hit.material.specular[2];
-            hits[k].material.shine = hit.material.shine;
+            hits[i].t = hit.t;
+            hits[i].normal = hit.normal;
+            hits[i].material.diffuse[0] = hit.material.diffuse[0];
+            hits[i].material.diffuse[1] = hit.material.diffuse[1];
+            hits[i].material.diffuse[2] = hit.material.diffuse[2];
+            hits[i].material.specular[0] = hit.material.specular[0];
+            hits[i].material.specular[1] = hit.material.specular[1];
+            hits[i].material.specular[2] = hit.material.specular[2];
+            hits[i].material.shine = hit.material.shine;
+            hits[i].vis = 1;
           }
         }
       }
     }
-  }
-  
 
-  #pragma omp parallel for
-  for(int m = 0; m < Width*Height; ++m) {
-    if(hits[m].material.diffuse[0] != 0 || hits[m].material.diffuse[1] != 0 || hits[m].material.diffuse[2] != 0){
-      outImage(hits[m].i,hits[m].j,0,0) = hits[m].material.diffuse[0];
-      outImage(hits[m].i,hits[m].j,0,1) = hits[m].material.diffuse[1];
-      outImage(hits[m].i,hits[m].j,0,2) = hits[m].material.diffuse[2];
+    #pragma omp for
+    for(int i = 0; i < Width*Height; ++i) {
+      for(int j = 0; j < Lights.size(); ++j){ 
+        Ray* shadowRay = new Ray;
+        shadowRay->origin = rays[hits[i].i][hits[i].j]->eval(hits[i].t) + 0.0006 * hits[i].normal;
+        shadowRay->direction = Lights[j]->getDirection(shadowRay->origin);
+        shadowRay->tNear = (Lights[j]->getPoint() - shadowRay->origin).norm();
+        for(int k = 0; k < Primitives.size(); ++k) {
+          if(Primitives[k]->isHit(transformRay(shadowRay, Primitives[k]->getLocal()), hit)) {
+            hits[i].vis = 0;
+            break;
+          }
+        }
+      }
+    }
+
+    #pragma omp for
+    for(int i = 0; i < Width*Height; ++i) {
+      if(hits[i].vis){
+        for(int j = 0; j < Lights.size(); ++j)  {
+          addColors(colors[hits[i].i][hits[i].j],Lights[j]->illuminate(transformRay(rays[hits[i].i][hits[i].j], Lights[j]->getLocal()), hits[i]));
+        }
+        for(int j = 0; j < 3; ++j) {
+          colors[hits[i].i][hits[i].j][j] += ambient * hits[i].material.diffuse[j];
+          if(colors[hits[i].i][hits[i].j][j] > 255) colors[hits[i].i][hits[i].j][j] = 255;
+          if(colors[hits[i].i][hits[i].j][j] < 0) colors[hits[i].i][hits[i].j][j] = 0;
+        } 
+      }
+    }  
+
+    #pragma omp for
+    for(int i = 0; i < Width*Height; ++i) {
+      if(hits[i].vis){
+        outImage(hits[i].i,hits[i].j,0,0) = colors[hits[i].i][hits[i].j][0];
+        outImage(hits[i].i,hits[i].j,0,1) = colors[hits[i].i][hits[i].j][1];
+        outImage(hits[i].i,hits[i].j,0,2) = colors[hits[i].i][hits[i].j][2];
+      }
     }
   }
 
@@ -125,6 +172,10 @@ int main(int argc, char *argv[]) {
 
   outImage.save_png(outfile);
 
+  #pragma omp parallel for
+  for(int i = 0; i < Width; ++i) {
+    free(rays[i]);
+  }
   free(rays);
 
   #pragma omp parallel for
@@ -134,7 +185,17 @@ int main(int argc, char *argv[]) {
       free(hits[i].material.specular);
     }
   }
+
   free(hits);
+
+  #pragma omp parallel for 
+  {
+    for(int i = 0; i < Width; ++i) {
+      free(colors[i]);
+    }
+  }
+
+  free (colors);
 
   return 0;
 }

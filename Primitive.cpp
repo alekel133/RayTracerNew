@@ -94,8 +94,7 @@ bool Sphere::isHit(Ray *ray, Hit &hit) {
   if(t0 < 0){
     if(t1 > ray->tNear) return false;
     hit.t = t1;
-    Vector4d point = ray->eval(hit.t);
-    Vector4d normal((getLocal() * point)-Vector4d(0,0,0,1));
+    Vector4d normal = ray->eval(hit.t) - Vector4d(0,0,0,1);
     hit.normal = (getWorld() * normal).normalized();
     return true;
   }
@@ -103,16 +102,14 @@ bool Sphere::isHit(Ray *ray, Hit &hit) {
   if(t1 != t0) {
     hit.t = std::min(t0, t1);
     if(hit.t > ray->tNear) return false;
-    Vector4d point = ray->eval(hit.t);
-    Vector4d normal((getLocal() * point)-origin);
+    Vector4d normal = ray->eval(hit.t) - Vector4d(0,0,0,1);
     hit.normal = (getWorld() * normal).normalized();
     return true;
   }
   
   if(t0 > ray->tNear) return false;
   hit.t = t0;
-  Vector4d point = ray->eval(hit.t);
-  Vector4d normal((getLocal() * point)-origin);
+  Vector4d normal = ray->eval(hit.t) - Vector4d(0,0,0,1);
   hit.normal = (getWorld() * normal).normalized();
   return true;
 }
@@ -192,7 +189,7 @@ bool Mesh::isHit(Ray *ray, Hit &hit) {
     pvec << direction.cross(AC);
     double det = AB.dot(pvec);
 
-    if(det < 0 ) continue;
+    if(det < DBL_MIN && det > -DBL_MAX) continue;
 
     double invDet = 1.0/det;
 
@@ -213,8 +210,8 @@ bool Mesh::isHit(Ray *ray, Hit &hit) {
     if(t < hit.t) {
       hit.t = t;
       hit.material = material;
-      hit.normal << AB.cross(AC).normalized(), 0;
-      hit.normal = getWorld() * hit.normal;
+      hit.normal << AC.cross(AB).normalized(), 0;
+      hit.normal = (getWorld() * hit.normal);
     }
   }
   if(hit.t == DBL_MAX) {
@@ -321,7 +318,7 @@ Ray *generateRay(Camera &camera, int &iWidth, int &iHeight, int &i, int &j) {
   Vector4d dir = {0,0,1,0};
   Vector4d eye(0,0,0,1);
 
-  dir[0] = (((((i + 0.5)/iWidth)-0.5)));
+  dir[0] = (((((i + 0.5)/iWidth)-0.5))) * double(iWidth)/iHeight;
   dir[1] = (((((j + 0.5)/iHeight)-0.5)));
 
   Ray *ray = new Ray(eye, dir);

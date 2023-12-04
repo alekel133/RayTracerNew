@@ -1,10 +1,10 @@
-Height: 700;
-Width: 700;
+Height: 400;
+Width: 400;
 FOV: 90;
 Ambient: 0.2;
 Camera {
   transform:
-    TZ:50;
+    TZ:70;
 }
 
 Direction {
